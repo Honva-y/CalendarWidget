@@ -10,8 +10,8 @@ let args = CommandLine.arguments
 // 调试用：CalendarWidget --widget small|medium|large|extraLarge out.png [dark]，渲染小组件的样子
 if let i = args.firstIndex(of: "--widget"), i + 2 < args.count, let size = WidgetSize(rawValue: args[i + 1]) {
     MainActor.assumeIsolated {
-        let frames: [WidgetSize: CGSize] = [.small: CGSize(width: 170, height: 170), .medium: CGSize(width: 364, height: 170),
-                                            .large: CGSize(width: 364, height: 382), .extraLarge: CGSize(width: 766, height: 382)]
+        let frames: [WidgetSize: CGSize] = [.small: CGSize(width: 164, height: 164), .medium: CGSize(width: 344, height: 164),
+                                            .large: CGSize(width: 344, height: 344), .extraLarge: CGSize(width: 704, height: 344)]
         let y = Calendar.current.component(.year, from: Date())
         var marks = HolidayMarks()
         for yy in y - 1...y + 1 { marks.merge(HolidayData.load(year: yy, cacheDirs: [HolidayData.hostCacheDir]) ?? [:]) { $1 } }

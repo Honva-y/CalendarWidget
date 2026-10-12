@@ -17,7 +17,7 @@ let package = Package(
             name: "CalendarWidgetExtension",
             dependencies: ["CalendarCore"],
             swiftSettings: [.unsafeFlags(["-application-extension"])],
-            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension"])]
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension", "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain", "-Xlinker", "-exported_symbol", "-Xlinker", "_main"])]
         ),
     ]
 )

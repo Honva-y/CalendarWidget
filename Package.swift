@@ -5,6 +5,19 @@ let package = Package(
     name: "CalendarWidget",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "CalendarWidget", path: "Sources/CalendarWidget")
+        // App 与小组件共用的日历逻辑和视图
+        .target(
+            name: "CalendarCore",
+            swiftSettings: [.unsafeFlags(["-application-extension"])]
+        ),
+        // 菜单栏 + 桌面窗口 App（小组件的宿主）
+        .executableTarget(name: "CalendarWidget", dependencies: ["CalendarCore"]),
+        // 通知中心 / 桌面小组件扩展
+        .executableTarget(
+            name: "CalendarWidgetExtension",
+            dependencies: ["CalendarCore"],
+            swiftSettings: [.unsafeFlags(["-application-extension"])],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension"])]
+        ),
     ]
 )

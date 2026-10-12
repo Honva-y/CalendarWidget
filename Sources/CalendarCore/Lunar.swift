@@ -1,12 +1,12 @@
 import Foundation
 
 /// 农历、节气与传统节日
-enum Lunar {
-    struct LunarDate {
-        let cycleYear: Int   // 六十甲子中的序号 1…60
-        let month: Int
-        let day: Int
-        let isLeap: Bool
+public enum Lunar {
+    public struct LunarDate {
+        public let cycleYear: Int   // 六十甲子中的序号 1…60
+        public let month: Int
+        public let day: Int
+        public let isLeap: Bool
     }
 
     private static let chinese: Calendar = {
@@ -32,25 +32,25 @@ enum Lunar {
         }
     }()
 
-    static func date(for date: Date) -> LunarDate {
+    public static func date(for date: Date) -> LunarDate {
         let c = chinese.dateComponents([.year, .month, .day], from: date)
         return LunarDate(cycleYear: c.year ?? 1, month: c.month ?? 1, day: c.day ?? 1, isLeap: c.isLeapMonth ?? false)
     }
 
-    static func dayName(_ d: Int) -> String { dayNames[max(1, min(30, d)) - 1] }
+    public static func dayName(_ d: Int) -> String { dayNames[max(1, min(30, d)) - 1] }
 
-    static func monthName(_ m: Int, leap: Bool) -> String {
+    public static func monthName(_ m: Int, leap: Bool) -> String {
         (leap ? "闰" : "") + monthNames[max(1, min(12, m)) - 1] + "月"
     }
 
     /// 例如 "丙午马年"
-    static func yearName(cycleYear: Int) -> String {
+    public static func yearName(cycleYear: Int) -> String {
         let i = cycleYear - 1
         return "\(stems[i % 10])\(branches[i % 12])\(zodiacs[i % 12])年"
     }
 
     /// 某天显示在格子里的副标题：农历节日 > 公历节日 > 节气 > 农历日（初一显示月份）
-    static func subtitle(for date: Date, calendar: Calendar) -> (text: String, kind: SubtitleKind) {
+    public static func subtitle(for date: Date, calendar: Calendar) -> (text: String, kind: SubtitleKind) {
         let ld = self.date(for: date)
         if let f = lunarFestival(for: date, lunar: ld) { return (f, .festival) }
         if let f = solarFestival(for: date, calendar: calendar) { return (f, .festival) }
@@ -61,7 +61,7 @@ enum Lunar {
     }
 
     /// 某天所有的节日（用于悬停提示）
-    static func allFestivals(for date: Date, calendar: Calendar) -> [String] {
+    public static func allFestivals(for date: Date, calendar: Calendar) -> [String] {
         let ld = self.date(for: date)
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         return [lunarFestival(for: date, lunar: ld),
@@ -69,7 +69,20 @@ enum Lunar {
                 SolarTerms.term(year: c.year!, month: c.month!, day: c.day!)].compactMap { $0 }
     }
 
-    static func lunarFestival(for date: Date, lunar ld: LunarDate) -> String? {
+    /// 今天之后最近的一个法定节日（按公历/农历推算，不依赖放假安排数据）
+    public static func nextMajorFestival(after today: Date, calendar cal: Calendar) -> (name: String, date: Date, days: Int)? {
+        let majors: Set<String> = ["元旦", "春节", "清明", "劳动节", "端午节", "中秋节", "国庆节"]
+        let start = cal.startOfDay(for: today)
+        for offset in 1...400 {
+            guard let d = cal.date(byAdding: .day, value: offset, to: start) else { break }
+            if let name = allFestivals(for: d, calendar: cal).first(where: majors.contains) {
+                return (name == "清明" ? "清明节" : name, d, offset)
+            }
+        }
+        return nil
+    }
+
+    public static func lunarFestival(for date: Date, lunar ld: LunarDate) -> String? {
         if !ld.isLeap {
             switch (ld.month, ld.day) {
             case (1, 1): return "春节"
@@ -93,7 +106,7 @@ enum Lunar {
         return nil
     }
 
-    static func solarFestival(for date: Date, calendar: Calendar) -> String? {
+    public static func solarFestival(for date: Date, calendar: Calendar) -> String? {
         let c = calendar.dateComponents([.month, .day, .weekday], from: date)
         let m = c.month!, d = c.day!
         switch (m, d) {
@@ -123,10 +136,10 @@ enum Lunar {
     }
 }
 
-enum SubtitleKind { case lunar, lunarMonth, term, festival }
+public enum SubtitleKind { case lunar, lunarMonth, term, festival }
 
 /// 二十四节气（寿星通式，适用于 2000–2099 年，含已知修正）
-enum SolarTerms {
+public enum SolarTerms {
     private static let names = ["小寒", "大寒", "立春", "雨水", "惊蛰", "春分", "清明", "谷雨",
                                 "立夏", "小满", "芒种", "夏至", "小暑", "大暑", "立秋", "处暑",
                                 "白露", "秋分", "寒露", "霜降", "立冬", "小雪", "大雪", "冬至"]
@@ -139,7 +152,7 @@ enum SolarTerms {
         2082: [1: 1], 2084: [5: 1], 2089: [19: 1, 20: 1],
     ]
 
-    static func day(year: Int, index: Int) -> Int? {
+    public static func day(year: Int, index: Int) -> Int? {
         guard (2000...2099).contains(year) else { return nil }
         let y = year % 100
         // 1、2 月的四个节气使用 (Y-1)/4 计算闰年数
@@ -148,7 +161,7 @@ enum SolarTerms {
         return d + (corrections[year]?[index] ?? 0)
     }
 
-    static func term(year: Int, month: Int, day: Int) -> String? {
+    public static func term(year: Int, month: Int, day: Int) -> String? {
         for i in [(month - 1) * 2, (month - 1) * 2 + 1] where self.day(year: year, index: i) == day {
             return names[i]
         }

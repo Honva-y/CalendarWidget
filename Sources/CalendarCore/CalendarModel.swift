@@ -1,74 +1,33 @@
 import Foundation
 
-struct DayCell: Identifiable {
-    let date: Date
-    let day: Int
-    let inMonth: Bool
-    let isToday: Bool
-    let isWeekend: Bool
-    let subtitle: String
-    let subtitleKind: SubtitleKind
-    let holiday: HolidayMark?
-    let tooltip: String
-    var id: Date { date }
+public struct DayCell: Identifiable {
+    public let date: Date
+    public let day: Int
+    public let inMonth: Bool
+    public let isToday: Bool
+    public let isWeekend: Bool
+    public let subtitle: String
+    public let subtitleKind: SubtitleKind
+    public let holiday: HolidayMark?
+    public let tooltip: String
+    public var id: Date { date }
 }
 
-struct WeekRow: Identifiable {
-    let weekNumber: Int
-    let days: [DayCell]
-    var id: Date { days[0].date }
+public struct WeekRow: Identifiable {
+    public let weekNumber: Int
+    public let days: [DayCell]
+    public var id: Date { days[0].date }
 }
 
-struct MonthGrid {
-    let year: Int
-    let month: Int
-    let weekdays: [Int]       // 表头的 weekday（1=周日…7=周六），按开始日排列
-    let rows: [WeekRow]       // 固定 6 行，保证尺寸稳定
+public struct MonthGrid {
+    public let year: Int
+    public let month: Int
+    public let weekdays: [Int]       // 表头的 weekday（1=周日…7=周六），按开始日排列
+    public let rows: [WeekRow]       // 固定 6 行，保证尺寸稳定
 }
 
-/// 当前显示的月份和"今天"，供界面与菜单共享
-@MainActor
-final class ViewState: ObservableObject {
-    static let shared = ViewState()
-
-    @Published var year: Int
-    @Published var month: Int
-    @Published private(set) var today = Date()
-
-    private init() {
-        let c = Calendar.current.dateComponents([.year, .month], from: Date())
-        year = c.year!
-        month = c.month!
-    }
-
-    func shift(months: Int) {
-        var total = year * 12 + (month - 1) + months
-        total = max(1901 * 12, min(2099 * 12 + 11, total))
-        year = total / 12
-        month = total % 12 + 1
-    }
-
-    func goToday() {
-        refreshToday()
-        let c = Calendar.current.dateComponents([.year, .month], from: today)
-        year = c.year!
-        month = c.month!
-    }
-
-    /// 跨天时调用；若正在看"今天所在的月"，则自动跟随到新月份
-    func refreshToday() {
-        let old = Calendar.current.dateComponents([.year, .month], from: today)
-        today = Date()
-        let new = Calendar.current.dateComponents([.year, .month], from: today)
-        if old != new && old.year == year && old.month == month {
-            year = new.year!
-            month = new.month!
-        }
-    }
-}
-
-enum CalendarModel {
-    static func calendar(firstWeekday: Int, rule: WeekRule) -> Calendar {
+public enum CalendarModel {
+    public static func calendar(firstWeekday: Int, rule: WeekRule) -> Calendar {
         var c = Calendar(identifier: .gregorian)
         c.locale = Locale(identifier: "zh_CN")
         c.timeZone = .current
@@ -77,8 +36,7 @@ enum CalendarModel {
         return c
     }
 
-    @MainActor
-    static func grid(year: Int, month: Int, today: Date, calendar cal: Calendar, holidays: HolidayStore) -> MonthGrid {
+    public static func grid(year: Int, month: Int, today: Date, calendar cal: Calendar, holidays: HolidayMarks) -> MonthGrid {
         let first = cal.date(from: DateComponents(year: year, month: month, day: 1))!
         let offset = (cal.component(.weekday, from: first) - cal.firstWeekday + 7) % 7
         let start = cal.date(byAdding: .day, value: -offset, to: first)!
@@ -96,11 +54,10 @@ enum CalendarModel {
         return MonthGrid(year: year, month: month, weekdays: weekdays, rows: rows)
     }
 
-    @MainActor
-    private static func cell(for date: Date, month: Int, today: Date, calendar cal: Calendar, holidays: HolidayStore) -> DayCell {
+    private static func cell(for date: Date, month: Int, today: Date, calendar cal: Calendar, holidays: HolidayMarks) -> DayCell {
         let c = cal.dateComponents([.year, .month, .day, .weekday], from: date)
         let sub = Lunar.subtitle(for: date, calendar: cal)
-        let mark = holidays.mark(year: c.year!, month: c.month!, day: c.day!)
+        let mark = holidays[HolidayData.key(year: c.year!, month: c.month!, day: c.day!)]
 
         let ld = Lunar.date(for: date)
         var tip = "\(c.year!)年\(c.month!)月\(c.day!)日 星期\(weekdayNames[c.weekday! - 1])\n"
@@ -124,7 +81,7 @@ enum CalendarModel {
     }
 
     /// 今天的统计：第几周、第几天、全年天数
-    static func todayStats(_ today: Date, calendar cal: Calendar) -> (week: Int, dayOfYear: Int, daysInYear: Int) {
+    public static func todayStats(_ today: Date, calendar cal: Calendar) -> (week: Int, dayOfYear: Int, daysInYear: Int) {
         let week = cal.component(.weekOfYear, from: today)
         let doy = cal.ordinality(of: .day, in: .year, for: today) ?? 1
         let days = cal.range(of: .day, in: .year, for: today)?.count ?? 365

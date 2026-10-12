@@ -1,6 +1,8 @@
 import AppKit
+import CalendarCore
 import ServiceManagement
 import SwiftUI
+import WidgetKit
 
 /// 右键时弹出与菜单栏相同的设置菜单
 private final class WidgetHostingView: NSHostingView<CalendarView> {
@@ -15,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var scrollAccum: CGFloat = 0
     private var scrollConsumed = false
+    private var widgetReload: DispatchWorkItem?
     private let defaults = UserDefaults.standard
 
     private static let sizePresets: [(String, NSSize)] = [
@@ -30,7 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applySettings()
 
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applySettings() }
+            MainActor.assumeIsolated {
+                self?.applySettings()
+                self?.scheduleWidgetReload()
+            }
         }
         // 跨天、唤醒、时区变化时刷新"今天"
         let refresh: @Sendable (Notification) -> Void = { _ in MainActor.assumeIsolated { ViewState.shared.refreshToday() } }
@@ -86,7 +92,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ])
         }
         window.contentView = container
-        window.orderFrontRegardless()
+    }
+
+    /// 设置变化后刷新通知中心/桌面小组件（合并短时间内的多次变化）
+    private func scheduleWidgetReload() {
+        widgetReload?.cancel()
+        let work = DispatchWorkItem { WidgetCenter.shared.reloadAllTimelines() }
+        widgetReload = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // 点击小组件或再次打开 App 时：显示桌面日历，若已关闭则弹出设置菜单
+        if defaults.bool(forKey: Keys.showDesktopWindow) {
+            ViewState.shared.goToday()
+            window.orderFrontRegardless()
+        } else {
+            statusItem.button?.performClick(nil)
+        }
+        return false
     }
 
     private func applySettings() {
@@ -115,6 +139,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if locked { window.styleMask.remove(.resizable) } else { window.styleMask.insert(.resizable) }
 
         effectView.alphaValue = CGFloat(defaults.double(forKey: Keys.opacity))
+
+        let show = defaults.bool(forKey: Keys.showDesktopWindow)
+        if show && !window.isVisible { window.orderFrontRegardless() }
+        if !show && window.isVisible { window.orderOut(nil) }
     }
 
     private func handleScroll(_ event: NSEvent) {
@@ -155,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(item("回到今天", #selector(goToday)))
-        menu.addItem(item(window.isVisible ? "隐藏日历" : "显示日历", #selector(toggleWindow)))
+        menu.addItem(item("如何添加到通知中心…", #selector(showWidgetHelp)))
         menu.addItem(.separator())
 
         let fw = defaults.integer(forKey: Keys.firstWeekday)
@@ -172,25 +200,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggle("显示法定节假日（休/班）", Keys.showHolidays))
         menu.addItem(.separator())
 
+        // 以下只影响桌面日历窗口
+        menu.addItem(toggle("显示桌面日历窗口", Keys.showDesktopWindow))
+        var windowItems: [NSMenuItem] = []
         let level = defaults.string(forKey: Keys.windowLevel)
-        menu.addItem(submenu("窗口层级", WindowLevelOption.allCases.map {
+        windowItems.append(submenu("窗口层级", WindowLevelOption.allCases.map {
             choice($0.title, key: Keys.windowLevel, value: $0.rawValue, checked: level == $0.rawValue)
         }))
         let appearance = defaults.string(forKey: Keys.appearance)
-        menu.addItem(submenu("外观", AppearanceOption.allCases.map {
+        windowItems.append(submenu("外观", AppearanceOption.allCases.map {
             choice($0.title, key: Keys.appearance, value: $0.rawValue, checked: appearance == $0.rawValue)
         }))
         let opacity = defaults.double(forKey: Keys.opacity)
-        menu.addItem(submenu("背景不透明度", [1.0, 0.8, 0.6, 0.4, 0.0].map { v in
+        windowItems.append(submenu("背景不透明度", [1.0, 0.8, 0.6, 0.4, 0.0].map { v in
             choice(v == 0 ? "完全透明" : "\(Int(v * 100))%", key: Keys.opacity, value: v, checked: abs(opacity - v) < 0.01)
         }))
-        let sizeItems = Self.sizePresets.enumerated().map { i, p -> NSMenuItem in
+        windowItems.append(submenu("尺寸（也可拖动边缘调整）", Self.sizePresets.enumerated().map { i, p -> NSMenuItem in
             let it = item("\(p.0)（\(Int(p.1.width))×\(Int(p.1.height))）", #selector(applySizePreset(_:)))
             it.tag = i
             return it
-        }
-        menu.addItem(submenu("尺寸（也可拖动边缘自由调整）", sizeItems))
-        menu.addItem(toggle("锁定位置和大小", Keys.locked))
+        }))
+        windowItems.append(toggle("锁定位置和大小", Keys.locked))
+        menu.addItem(submenu("桌面日历窗口设置", windowItems))
         menu.addItem(.separator())
 
         menu.addItem(item("更新节假日数据", #selector(refreshHolidays)))
@@ -242,11 +273,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func goToday() {
         ViewState.shared.goToday()
-        window.orderFrontRegardless()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
-    @objc private func toggleWindow() {
-        if window.isVisible { window.orderOut(nil) } else { window.orderFrontRegardless() }
+    @objc private func showWidgetHelp() {
+        let alert = NSAlert()
+        alert.messageText = "添加到通知中心"
+        alert.informativeText = """
+        1. 点击屏幕右上角的日期时间，打开通知中心
+        2. 滚动到底部，点击「编辑小组件」
+        3. 在左侧列表中找到「日历小组件」，选择小、中、大尺寸后拖到通知中心
+
+        想换尺寸：右键点击小组件，选择小、中或大。
+        也可以把小组件直接拖到桌面上。
+        每周开始日等设置在此菜单中修改，小组件会自动同步。
+        """
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     @objc private func applySizePreset(_ sender: NSMenuItem) {
@@ -259,6 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func refreshHolidays() {
         HolidayStore.shared.refreshAll()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     @objc private func toggleLoginItem() {

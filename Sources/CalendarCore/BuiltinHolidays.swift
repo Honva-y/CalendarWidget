@@ -2,8 +2,8 @@ import Foundation
 
 /// 内置的法定节假日数据（来自 NateScarlet/holiday-cn），网络不可用时兜底。
 /// 每行格式：日期 名称 1=放假/0=调休上班
-enum BuiltinHolidays {
-    static let data: [Int: String] = [
+public enum BuiltinHolidays {
+    public static let data: [Int: String] = [
         2025: """
         2025-01-01 元旦 1
         2025-01-26 春节 0

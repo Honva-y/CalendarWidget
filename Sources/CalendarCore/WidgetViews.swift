@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 
 public enum WidgetSize: String, CaseIterable {
@@ -10,18 +11,20 @@ public struct CalendarWidgetContent: View {
     let today: Date
     let options: DisplayOptions
     let marks: HolidayMarks
+    let monthOffset: Int   // 相对本月翻了几个月
 
-    public init(size: WidgetSize, today: Date, options: DisplayOptions, marks: HolidayMarks) {
+    public init(size: WidgetSize, today: Date, options: DisplayOptions, marks: HolidayMarks, monthOffset: Int = 0) {
         self.size = size
         self.today = today
         self.options = options
         self.marks = marks
+        self.monthOffset = monthOffset
     }
 
     public var body: some View {
         let cal = options.calendar
-        let c = cal.dateComponents([.year, .month], from: today)
-        let grid = CalendarModel.grid(year: c.year!, month: c.month!, today: today, calendar: cal, holidays: marks)
+        let shown = WidgetMonthState.month(adding: monthOffset, to: today, calendar: cal)
+        let grid = CalendarModel.grid(year: shown.year, month: shown.month, today: today, calendar: cal, holidays: marks)
 
         switch size {
         case .small:
@@ -41,7 +44,9 @@ public struct CalendarWidgetContent: View {
             }
         case .large:
             VStack(spacing: 2) {
-                MonthHeader(year: grid.year, month: grid.month, today: today, calendar: cal, height: 42) { EmptyView() }
+                MonthHeader(year: grid.year, month: grid.month, today: today, calendar: cal, height: 42) {
+                    MonthNavButtons(size: 15, isCurrentMonth: monthOffset == 0)
+                }
                 MonthGridView(grid: grid, showWeekNumbers: options.showWeekNumbers, showLunar: options.showLunar,
                               showHolidays: options.showHolidays)
             }
@@ -50,7 +55,9 @@ public struct CalendarWidgetContent: View {
                 TodayPanel(today: today, calendar: cal, marks: marks, showHolidays: options.showHolidays, compact: false)
                     .frame(width: 200)
                 VStack(spacing: 2) {
-                    MonthHeader(year: grid.year, month: grid.month, today: today, calendar: cal, height: 42) { EmptyView() }
+                    MonthHeader(year: grid.year, month: grid.month, today: today, calendar: cal, height: 42) {
+                    MonthNavButtons(size: 15, isCurrentMonth: monthOffset == 0)
+                }
                     MonthGridView(grid: grid, showWeekNumbers: options.showWeekNumbers, showLunar: options.showLunar,
                                   showHolidays: options.showHolidays)
                 }
@@ -58,24 +65,59 @@ public struct CalendarWidgetContent: View {
         }
     }
 
-    /// 小尺寸用的单行标题："10月" …… "第42周"
+    /// 小尺寸用的单行标题："10月 第42周 …… ‹ ›"
     private func compactTitle(grid: MonthGrid, cal: Calendar, showWeek: Bool = true) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("\(grid.month)月")
+        let thisYear = cal.component(.year, from: today)
+        return HStack(alignment: .center, spacing: 5) {
+            Text(grid.year == thisYear ? "\(grid.month)月" : "\(String(grid.year))年\(grid.month)月")
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(holidayRed)
-            Spacer(minLength: 2)
             if showWeek {
                 Text("第\(CalendarModel.todayStats(today, calendar: cal).week)周")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
-            } else {
+            } else if grid.year == thisYear {
                 Text(String(grid.year))
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
+            Spacer(minLength: 2)
+            MonthNavButtons(size: 11, isCurrentMonth: monthOffset == 0)
         }
+        .lineLimit(1)
         .padding(.horizontal, 3)
+    }
+}
+
+/// 翻页按钮：‹ 上个月、今（不在本月时出现）、› 下个月。点击由小组件扩展执行对应的意图
+struct MonthNavButtons: View {
+    let size: CGFloat
+    let isCurrentMonth: Bool
+
+    var body: some View {
+        HStack(spacing: size * 0.35) {
+            Button(intent: PreviousMonthIntent()) { icon("chevron.left") }
+            if !isCurrentMonth {
+                Button(intent: ThisMonthIntent()) {
+                    Text("今")
+                        .font(.system(size: size * 0.95, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: size * 1.75, height: size * 1.75)
+                        .background(Circle().fill(Color.accentColor))
+                }
+            }
+            Button(intent: NextMonthIntent()) { icon("chevron.right") }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func icon(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: size * 1.75, height: size * 1.75)
+            .background(Circle().fill(Color.primary.opacity(0.07)))
+            .contentShape(Circle())
     }
 }
 

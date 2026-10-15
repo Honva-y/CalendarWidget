@@ -16,6 +16,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APPEX/Contents/MacOS"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp .build/release/CalendarWidget "$APP/Contents/MacOS/CalendarWidget"
 cp .build/release/CalendarWidgetExtension "$APPEX/Contents/MacOS/LunarCalendarWidget"
+# 小组件翻页按钮用到的 App Intents 元数据（平时由 Xcode 生成）
+python3 tools/make-intents-metadata.py "$APPEX/Contents/Resources/Metadata.appintents"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

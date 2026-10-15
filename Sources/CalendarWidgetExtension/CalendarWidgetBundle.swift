@@ -6,6 +6,7 @@ struct CalendarEntry: TimelineEntry {
     let date: Date
     let options: DisplayOptions
     let marks: HolidayMarks
+    var monthOffset = 0
 }
 
 struct Provider: TimelineProvider {
@@ -33,14 +34,15 @@ struct Provider: TimelineProvider {
         return marks
     }
 
-    private func entry(at date: Date) -> CalendarEntry {
-        CalendarEntry(date: date, options: DisplayOptions(defaults: settings), marks: loadMarks(around: date))
+    private func entry(at date: Date, monthOffset: Int = 0) -> CalendarEntry {
+        CalendarEntry(date: date, options: DisplayOptions(defaults: settings), marks: loadMarks(around: date),
+                      monthOffset: monthOffset)
     }
 
     func placeholder(in context: Context) -> CalendarEntry { entry(at: Date()) }
 
     func getSnapshot(in context: Context, completion: @escaping (CalendarEntry) -> Void) {
-        completion(entry(at: Date()))
+        completion(entry(at: Date(), monthOffset: WidgetMonthState.offset()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalendarEntry>) -> Void) {
@@ -52,10 +54,14 @@ struct Provider: TimelineProvider {
             if !hasYear && HolidayData.cacheAge(year: year, in: ownCacheDir) > 24 * 3600 {
                 _ = await HolidayData.fetch(year: year, into: ownCacheDir, timeout: 8)
             }
-            // 今天一条、明天零点一条，过了零点后再请求新的时间线
+            // 当前一条（可能翻到了别的月份）；翻页闲置到期时回到本月；明天零点再一条
             let cal = Calendar.current
             let midnight = cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: now)!)
-            let entries = [entry(at: now), entry(at: midnight)]
+            var entries = [entry(at: now, monthOffset: WidgetMonthState.offset(now: now))]
+            if let expiry = WidgetMonthState.expiry(now: now), expiry < midnight {
+                entries.append(entry(at: expiry))
+            }
+            entries.append(entry(at: midnight))
             completion(Timeline(entries: entries, policy: .after(midnight.addingTimeInterval(60))))
         }
     }
@@ -66,7 +72,8 @@ struct CalendarWidgetEntryView: View {
     let entry: CalendarEntry
 
     var body: some View {
-        CalendarWidgetContent(size: size, today: entry.date, options: entry.options, marks: entry.marks)
+        CalendarWidgetContent(size: size, today: entry.date, options: entry.options, marks: entry.marks,
+                              monthOffset: entry.monthOffset)
             .containerBackground(.background, for: .widget)
     }
 

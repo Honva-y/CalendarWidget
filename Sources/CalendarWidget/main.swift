@@ -16,7 +16,9 @@ if let i = args.firstIndex(of: "--widget"), i + 2 < args.count, let size = Widge
         var marks = HolidayMarks()
         for yy in y - 1...y + 1 { marks.merge(HolidayData.load(year: yy, cacheDirs: [HolidayData.hostCacheDir]) ?? [:]) { $1 } }
         let dark = args.contains("dark")
-        let view = CalendarWidgetContent(size: size, today: Date(), options: DisplayOptions(defaults: .standard), marks: marks)
+        let offset = args.firstIndex(of: "--offset").flatMap { Int(args[$0 + 1]) } ?? 0
+        let view = CalendarWidgetContent(size: size, today: Date(), options: DisplayOptions(defaults: .standard), marks: marks,
+                                         monthOffset: offset)
             .padding(14)
             .frame(width: frames[size]!.width, height: frames[size]!.height)
             .background(dark ? Color(white: 0.12) : .white, in: RoundedRectangle(cornerRadius: 22))

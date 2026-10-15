@@ -7,6 +7,7 @@ struct CalendarEntry: TimelineEntry {
     let options: DisplayOptions
     let marks: HolidayMarks
     var monthOffset = 0
+    var direction = 0
 }
 
 struct Provider: TimelineProvider {
@@ -48,21 +49,29 @@ struct Provider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalendarEntry>) -> Void) {
         Task {
             let now = Date()
-            let year = Calendar.current.component(.year, from: now)
-            // 今年的数据缺失（例如宿主 App 未运行且内置数据不含今年）时，自己下载一次
-            let hasYear = loadMarks(around: now).keys.contains { $0.hasPrefix("\(year)-") }
-            if !hasYear && HolidayData.cacheAge(year: year, in: ownCacheDir) > 24 * 3600 {
-                _ = await HolidayData.fetch(year: year, into: ownCacheDir, timeout: 8)
-            }
-            // 当前一条（可能翻到了别的月份）；翻页闲置到期时回到本月；明天零点再一条
             let cal = Calendar.current
-            let midnight = cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: now)!)
-            var entries = [entry(at: now, monthOffset: WidgetMonthState.offset(now: now))]
-            if let expiry = WidgetMonthState.expiry(now: now), expiry < midnight {
-                entries.append(entry(at: expiry))
+            let year = cal.component(.year, from: now)
+            var marks = loadMarks(around: now)
+            // 今年的数据缺失（例如宿主 App 未运行且内置数据不含今年）时，自己下载一次
+            if !marks.keys.contains(where: { $0.hasPrefix("\(year)-") })
+                && HolidayData.cacheAge(year: year, in: ownCacheDir) > 24 * 3600,
+               await HolidayData.fetch(year: year, into: ownCacheDir, timeout: 8) != nil {
+                marks = loadMarks(around: now)
             }
-            entries.append(entry(at: midnight))
-            completion(Timeline(entries: entries, policy: .after(midnight.addingTimeInterval(60))))
+            let options = DisplayOptions(defaults: settings)
+            let midnight = cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: now)!)
+            let current = CalendarEntry(date: now, options: options, marks: marks,
+                                        monthOffset: WidgetMonthState.offset(now: now),
+                                        direction: WidgetMonthState.direction(now: now))
+
+            if let expiry = WidgetMonthState.expiry(now: now) {
+                // 翻页中：只渲染当前这一条，点击翻页时响应更快；到期回到本月（或过零点）时再要新的时间线
+                completion(Timeline(entries: [current], policy: .after(min(expiry, midnight))))
+            } else {
+                // 本月：今天一条、明天零点一条
+                let tomorrow = CalendarEntry(date: midnight, options: options, marks: marks)
+                completion(Timeline(entries: [current, tomorrow], policy: .after(midnight.addingTimeInterval(60))))
+            }
         }
     }
 }
@@ -73,7 +82,7 @@ struct CalendarWidgetEntryView: View {
 
     var body: some View {
         CalendarWidgetContent(size: size, today: entry.date, options: entry.options, marks: entry.marks,
-                              monthOffset: entry.monthOffset)
+                              monthOffset: entry.monthOffset, direction: entry.direction)
             .containerBackground(.background, for: .widget)
     }
 

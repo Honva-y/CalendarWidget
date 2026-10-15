@@ -40,6 +40,8 @@ public struct MonthHeader<Trailing: View>: View {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text("\(month)月")
                         .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                        .contentTransition(.numericText(value: Double(year * 12 + month)))
+                        .invalidatableContent()
                     Text(String(year))
                         .font(.system(size: titleSize * 0.62, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -79,8 +81,10 @@ public struct MonthGridView: View {
     let showWeekNumbers: Bool
     let showLunar: Bool
     let showHolidays: Bool
+    let tooltips: Bool
 
-    public init(grid: MonthGrid, showWeekNumbers: Bool, showLunar: Bool, showHolidays: Bool) {
+    public init(grid: MonthGrid, showWeekNumbers: Bool, showLunar: Bool, showHolidays: Bool, tooltips: Bool = true) {
+        self.tooltips = tooltips
         self.grid = grid
         self.showWeekNumbers = showWeekNumbers
         self.showLunar = showLunar
@@ -136,7 +140,7 @@ public struct MonthGridView: View {
             .minimumScaleFactor(0.7)
             .foregroundStyle(isCurrent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
             .frame(width: width, height: height)
-            .help("第 \(row.weekNumber) 周")
+            .modifier(Tooltip(text: tooltips ? "第 \(row.weekNumber) 周" : nil))
     }
 }
 
@@ -192,7 +196,7 @@ struct DayCellView: View {
         .frame(width: width, height: height)
         .opacity(cell.inMonth ? 1 : 0.32)
         .contentShape(Rectangle())
-        .help(cell.tooltip)
+        .modifier(Tooltip(text: cell.tooltip))
     }
 
     private func background(_ mark: HolidayMark?) -> Color {
@@ -215,5 +219,14 @@ struct DayCellView: View {
         case .lunarMonth: return .primary.opacity(0.75)
         case .lunar: return .secondary
         }
+    }
+}
+
+/// 有内容时才加鼠标悬停提示（小组件里没有悬停，省掉这部分开销）
+struct Tooltip: ViewModifier {
+    let text: String?
+
+    func body(content: Content) -> some View {
+        if let text { content.help(text) } else { content }
     }
 }

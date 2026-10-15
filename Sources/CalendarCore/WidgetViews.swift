@@ -12,25 +12,29 @@ public struct CalendarWidgetContent: View {
     let options: DisplayOptions
     let marks: HolidayMarks
     let monthOffset: Int   // 相对本月翻了几个月
+    let direction: Int     // 最近一次翻页方向，决定翻页动画从哪边推入
 
-    public init(size: WidgetSize, today: Date, options: DisplayOptions, marks: HolidayMarks, monthOffset: Int = 0) {
+    public init(size: WidgetSize, today: Date, options: DisplayOptions, marks: HolidayMarks,
+                monthOffset: Int = 0, direction: Int = 0) {
         self.size = size
         self.today = today
         self.options = options
         self.marks = marks
         self.monthOffset = monthOffset
+        self.direction = direction
     }
 
     public var body: some View {
         let cal = options.calendar
         let shown = WidgetMonthState.month(adding: monthOffset, to: today, calendar: cal)
-        let grid = CalendarModel.grid(year: shown.year, month: shown.month, today: today, calendar: cal, holidays: marks)
+        let grid = CalendarModel.grid(year: shown.year, month: shown.month, today: today, calendar: cal,
+                                      holidays: marks, tooltips: false)
 
         switch size {
         case .small:
             VStack(spacing: 2) {
                 compactTitle(grid: grid, cal: cal)
-                MonthGridView(grid: grid, showWeekNumbers: false, showLunar: false, showHolidays: options.showHolidays)
+                pagedGrid(grid, showWeekNumbers: false, showLunar: false)
             }
         case .medium:
             HStack(spacing: 12) {
@@ -38,30 +42,41 @@ public struct CalendarWidgetContent: View {
                     .frame(width: 112)
                 VStack(spacing: 2) {
                     compactTitle(grid: grid, cal: cal, showWeek: false)
-                    MonthGridView(grid: grid, showWeekNumbers: options.showWeekNumbers, showLunar: false,
-                                  showHolidays: options.showHolidays)
+                    pagedGrid(grid, showWeekNumbers: options.showWeekNumbers, showLunar: false)
                 }
             }
         case .large:
             VStack(spacing: 2) {
-                MonthHeader(year: grid.year, month: grid.month, today: today, calendar: cal, height: 42) {
-                    MonthNavButtons(size: 15, isCurrentMonth: monthOffset == 0)
-                }
-                MonthGridView(grid: grid, showWeekNumbers: options.showWeekNumbers, showLunar: options.showLunar,
-                              showHolidays: options.showHolidays)
+                header(grid: grid, cal: cal)
+                pagedGrid(grid, showWeekNumbers: options.showWeekNumbers, showLunar: options.showLunar)
             }
         case .extraLarge:
             HStack(spacing: 18) {
                 TodayPanel(today: today, calendar: cal, marks: marks, showHolidays: options.showHolidays, compact: false)
                     .frame(width: 200)
                 VStack(spacing: 2) {
-                    MonthHeader(year: grid.year, month: grid.month, today: today, calendar: cal, height: 42) {
-                    MonthNavButtons(size: 15, isCurrentMonth: monthOffset == 0)
-                }
-                    MonthGridView(grid: grid, showWeekNumbers: options.showWeekNumbers, showLunar: options.showLunar,
-                                  showHolidays: options.showHolidays)
+                    header(grid: grid, cal: cal)
+                    pagedGrid(grid, showWeekNumbers: options.showWeekNumbers, showLunar: options.showLunar)
                 }
             }
+        }
+    }
+
+    /// 月历网格：换月时从翻页方向推入新月份；点击翻页后、新内容出来前，系统会把它显示为"刷新中"
+    private func pagedGrid(_ grid: MonthGrid, showWeekNumbers: Bool, showLunar: Bool) -> some View {
+        ZStack {
+            MonthGridView(grid: grid, showWeekNumbers: showWeekNumbers, showLunar: showLunar,
+                          showHolidays: options.showHolidays, tooltips: false)
+                .id(grid.year * 12 + grid.month)
+                .transition(.push(from: direction < 0 ? .leading : .trailing))
+        }
+        .clipped()
+        .invalidatableContent()
+    }
+
+    private func header(grid: MonthGrid, cal: Calendar) -> some View {
+        MonthHeader(year: grid.year, month: grid.month, today: today, calendar: cal, height: 42) {
+            MonthNavButtons(size: 15, isCurrentMonth: monthOffset == 0)
         }
     }
 
@@ -72,6 +87,8 @@ public struct CalendarWidgetContent: View {
             Text(grid.year == thisYear ? "\(grid.month)月" : "\(String(grid.year))年\(grid.month)月")
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(holidayRed)
+                .contentTransition(.numericText(value: Double(grid.year * 12 + grid.month)))
+                .invalidatableContent()
             if showWeek {
                 Text("第\(CalendarModel.todayStats(today, calendar: cal).week)周")
                     .font(.system(size: 11, weight: .semibold))
@@ -104,11 +121,13 @@ struct MonthNavButtons: View {
                         .foregroundStyle(.white)
                         .frame(width: size * 1.75, height: size * 1.75)
                         .background(Circle().fill(Color.accentColor))
+                        .contentShape(Circle())
                 }
+                .transition(.scale.combined(with: .opacity))
             }
             Button(intent: NextMonthIntent()) { icon("chevron.right") }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressFeedbackStyle())
     }
 
     private func icon(_ name: String) -> some View {
@@ -118,6 +137,16 @@ struct MonthNavButtons: View {
             .frame(width: size * 1.75, height: size * 1.75)
             .background(Circle().fill(Color.primary.opacity(0.07)))
             .contentShape(Circle())
+    }
+}
+
+/// 按下时缩小变淡，松开恢复，让人知道点到了
+struct PressFeedbackStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.8 : 1)
+            .opacity(configuration.isPressed ? 0.5 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

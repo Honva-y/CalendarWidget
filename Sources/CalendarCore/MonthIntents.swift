@@ -8,6 +8,7 @@ public enum WidgetMonthState {
 
     private static let offsetKey = "widgetMonthOffset"
     private static let changedAtKey = "widgetMonthChangedAt"
+    private static let directionKey = "widgetMonthDirection"
 
     /// 当前有效的偏移；超时则视为 0
     public static func offset(now: Date = Date()) -> Int {
@@ -23,8 +24,18 @@ public enum WidgetMonthState {
         return Date(timeIntervalSince1970: UserDefaults.standard.double(forKey: changedAtKey) + idleReset)
     }
 
+    /// 最近一次翻页的方向：1=往后，-1=往前，用于翻页动画。闲置到期自动回到本月时，方向与之前的偏移相反
+    public static func direction(now: Date = Date()) -> Int {
+        let d = UserDefaults.standard
+        let raw = d.integer(forKey: offsetKey)
+        if raw != 0 && offset(now: now) == 0 { return raw > 0 ? -1 : 1 }
+        return d.integer(forKey: directionKey)
+    }
+
     static func set(_ offset: Int) {
         let d = UserDefaults.standard
+        let old = self.offset()
+        d.set(offset == old ? 0 : (offset > old ? 1 : -1), forKey: directionKey)
         d.set(max(-1200, min(1200, offset)), forKey: offsetKey)
         d.set(Date().timeIntervalSince1970, forKey: changedAtKey)
     }

@@ -25,6 +25,16 @@ public struct CalendarWidgetContent: View {
     }
 
     public var body: some View {
+        layout
+            .background {
+                // 接住按钮以外的点击，避免点偏时打开 App、关闭通知中心
+                Button(intent: IgnoreTapIntent()) { Color.clear.contentShape(Rectangle()) }
+                    .buttonStyle(NoFeedbackStyle())
+            }
+    }
+
+    @ViewBuilder
+    private var layout: some View {
         let cal = options.calendar
         let shown = WidgetMonthState.month(adding: monthOffset, to: today, calendar: cal)
         let grid = CalendarModel.grid(year: shown.year, month: shown.month, today: today, calendar: cal,
@@ -112,19 +122,23 @@ struct MonthNavButtons: View {
     let isCurrentMonth: Bool
 
     var body: some View {
+        // 三个按钮位置固定：「今」不在本月时才显示，但始终占位，避免「‹」跟着左右移动导致点空
         HStack(spacing: size * 0.35) {
             Button(intent: PreviousMonthIntent()) { icon("chevron.left") }
-            if !isCurrentMonth {
-                Button(intent: ThisMonthIntent()) {
-                    Text("今")
-                        .font(.system(size: size * 0.95, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: size * 1.75, height: size * 1.75)
-                        .background(Circle().fill(Color.accentColor))
-                        .contentShape(Circle())
+            ZStack {
+                if !isCurrentMonth {
+                    Button(intent: ThisMonthIntent()) {
+                        Text("今")
+                            .font(.system(size: size * 0.95, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: size * 1.75, height: size * 1.75)
+                            .background(Circle().fill(Color.accentColor))
+                            .contentShape(Circle())
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .transition(.scale.combined(with: .opacity))
             }
+            .frame(width: size * 1.75, height: size * 1.75)
             Button(intent: NextMonthIntent()) { icon("chevron.right") }
         }
         .buttonStyle(PressFeedbackStyle())
@@ -138,6 +152,11 @@ struct MonthNavButtons: View {
             .background(Circle().fill(Color.primary.opacity(0.07)))
             .contentShape(Circle())
     }
+}
+
+/// 不显示任何按下效果（用于铺在底层的空白点击区域）
+struct NoFeedbackStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label }
 }
 
 /// 按下时缩小变淡，松开恢复，让人知道点到了

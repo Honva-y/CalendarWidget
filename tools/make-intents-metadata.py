@@ -17,6 +17,7 @@ INTENTS = [
     ("PreviousMonthIntent", "上个月"),
     ("NextMonthIntent", "下个月"),
     ("ThisMonthIntent", "回到本月"),
+    ("IgnoreTapIntent", "日历"),
 ]
 
 

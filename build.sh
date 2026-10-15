@@ -11,7 +11,9 @@ VERSION="$(date +%Y%m%d%H%M%S)"   # 每次构建递增，促使系统重新加�
 swift build -c release
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APPEX/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APPEX/Contents/MacOS"
+[[ -f Resources/AppIcon.icns ]] || ./tools/make-icns.sh
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp .build/release/CalendarWidget "$APP/Contents/MacOS/CalendarWidget"
 cp .build/release/CalendarWidgetExtension "$APPEX/Contents/MacOS/LunarCalendarWidget"
 
@@ -24,6 +26,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>$HOST_ID</string>
     <key>CFBundleName</key><string>日历小组件</string>
     <key>CFBundleDisplayName</key><string>日历小组件</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.1</string>
     <key>CFBundleVersion</key><string>$VERSION</string>

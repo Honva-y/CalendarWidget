@@ -96,7 +96,7 @@ public struct CalendarWidgetContent: View {
         return HStack(alignment: .center, spacing: 5) {
             Text(grid.year == thisYear ? "\(grid.month)月" : "\(String(grid.year))年\(grid.month)月")
                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(holidayRed)
+                .foregroundStyle(restGreen)
                 .contentTransition(.numericText(value: Double(grid.year * 12 + grid.month)))
                 .invalidatableContent()
             if showWeek {
@@ -191,7 +191,7 @@ struct TodayPanel: View {
         VStack(alignment: .leading, spacing: 2 * s) {
             Text("星期\(weekdayNames[c.weekday! - 1])")
                 .font(.system(size: 12 * s, weight: .semibold))
-                .foregroundStyle(holidayRed)
+                .foregroundStyle(restGreen)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(c.day!)")
                     .font(.system(size: 40 * s, weight: .bold, design: .rounded))
@@ -207,7 +207,7 @@ struct TodayPanel: View {
             if let f = festivals.first ?? mark?.name {
                 Text(mark.map { "\(f) · \($0.isOffDay ? "休" : "班")" } ?? f)
                     .font(.system(size: 11 * s, weight: .semibold))
-                    .foregroundStyle(mark?.isOffDay == false ? Color.secondary : holidayRed)
+                    .foregroundStyle(mark?.isOffDay == false ? Color.secondary : restGreen)
             }
             Spacer(minLength: 0)
             HStack(spacing: 0) {

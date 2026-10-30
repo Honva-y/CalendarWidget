@@ -1,8 +1,13 @@
 import SwiftUI
 
-public let holidayRed = Color(nsColor: .systemRed)
+/// 休息日、节假日用的翡翠绿：浅色模式偏深保证白底上清晰，深色模式更亮
+public let restGreen = Color(nsColor: NSColor(name: nil) { appearance in
+    appearance.bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua]) != nil
+        ? NSColor(srgbRed: 0.24, green: 0.82, blue: 0.55, alpha: 1)   // #3DD18C
+        : NSColor(srgbRed: 0.05, green: 0.62, blue: 0.40, alpha: 1)   // #0D9E66
+})
 private let workGray = Color(nsColor: .systemGray)
-private let termGreen = Color(nsColor: .systemTeal)
+private let termIndigo = Color(nsColor: .systemIndigo)
 
 public func clamp(_ v: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { max(lo, min(hi, v)) }
 
@@ -125,7 +130,7 @@ public struct MonthGridView: View {
             ForEach(grid.weekdays, id: \.self) { wd in
                 Text(weekdayNames[wd - 1])
                     .frame(width: cellW)
-                    .foregroundStyle(wd == 1 || wd == 7 ? AnyShapeStyle(holidayRed.opacity(0.8)) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(wd == 1 || wd == 7 ? AnyShapeStyle(restGreen.opacity(0.85)) : AnyShapeStyle(.secondary))
             }
         }
         .font(.system(size: size, weight: .medium))
@@ -188,7 +193,7 @@ struct DayCellView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, badge * 0.18)
                     .padding(.vertical, badge * 0.05)
-                    .background(RoundedRectangle(cornerRadius: badge * 0.3).fill(mark.isOffDay ? holidayRed : workGray))
+                    .background(RoundedRectangle(cornerRadius: badge * 0.3).fill(mark.isOffDay ? restGreen : workGray))
                     .offset(x: gap * 0.5, y: -gap * 0.5)
             }
         }
@@ -202,20 +207,20 @@ struct DayCellView: View {
     private func background(_ mark: HolidayMark?) -> Color {
         if cell.isToday { return .accentColor }
         guard let mark else { return .clear }
-        return mark.isOffDay ? holidayRed.opacity(0.14) : workGray.opacity(0.18)
+        return mark.isOffDay ? restGreen.opacity(0.14) : workGray.opacity(0.18)
     }
 
     private func dayColor(_ mark: HolidayMark?) -> Color {
         if cell.isToday { return .white }
-        if let mark { return mark.isOffDay ? holidayRed : .primary }
-        return cell.isWeekend ? holidayRed.opacity(0.85) : .primary
+        if let mark { return mark.isOffDay ? restGreen : .primary }
+        return cell.isWeekend ? restGreen.opacity(0.9) : .primary
     }
 
     private var subtitleColor: Color {
         if cell.isToday { return .white.opacity(0.9) }
         switch cell.subtitleKind {
-        case .festival: return holidayRed
-        case .term: return termGreen
+        case .festival: return restGreen
+        case .term: return termIndigo
         case .lunarMonth: return .primary.opacity(0.75)
         case .lunar: return .secondary
         }

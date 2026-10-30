@@ -1,21 +1,40 @@
 #!/bin/bash
-# 构建 日历小组件.app（含通知中心小组件扩展）；加 --install 会安装到 ~/Applications、注册小组件并启动
+# 构建 日历小组件.app（含通知中心小组件扩展）
+#   ./build.sh            只编译本机架构，生成 build/日历小组件.app
+#   ./build.sh --install  同上，并安装到 ~/Applications、注册小组件并启动
+#   ./build.sh --dmg      编译 Apple 芯片 + Intel 通用版，并打包成 build/CalendarWidget-<版本>.dmg
 set -euo pipefail
 cd "$(dirname "$0")"
 
+APP_VERSION="1.2"                   # 对外显示的版本号，发布新版本时修改
 APP="build/日历小组件.app"
 APPEX="$APP/Contents/PlugIns/CalendarWidgetExtension.appex"
 HOST_ID="local.calendarwidget"
 VERSION="$(date +%Y%m%d%H%M%S)"   # 每次构建递增，促使系统重新加载小组件
+MODE="${1:-}"
 
-swift build -c release
+if [[ "$MODE" == "--dmg" ]]; then
+    ARCHS=(arm64 x86_64)
+else
+    ARCHS=("$(uname -m)")
+fi
+for arch in "${ARCHS[@]}"; do
+    swift build -c release --triple "$arch-apple-macosx14.0"
+done
+
+# 把各架构的可执行文件合成一个（只有一个架构时就是直接复制）
+merge() {
+    local product="$1" out="$2" inputs=()
+    for arch in "${ARCHS[@]}"; do inputs+=(".build/$arch-apple-macosx/release/$product"); done
+    lipo -create "${inputs[@]}" -output "$out"
+}
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APPEX/Contents/MacOS"
 [[ -f Resources/AppIcon.icns ]] || ./tools/make-icns.sh
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-cp .build/release/CalendarWidget "$APP/Contents/MacOS/CalendarWidget"
-cp .build/release/CalendarWidgetExtension "$APPEX/Contents/MacOS/LunarCalendarWidget"
+merge CalendarWidget "$APP/Contents/MacOS/CalendarWidget"
+merge CalendarWidgetExtension "$APPEX/Contents/MacOS/LunarCalendarWidget"
 # 小组件翻页按钮用到的 App Intents 元数据（平时由 Xcode 生成）
 python3 tools/make-intents-metadata.py "$APPEX/Contents/Resources/Metadata.appintents"
 
@@ -30,7 +49,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key><string>日历小组件</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.1</string>
+    <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
@@ -49,7 +68,7 @@ cat > "$APPEX/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key><string>日历小组件</string>
     <key>CFBundleDisplayName</key><string>日历小组件</string>
     <key>CFBundlePackageType</key><string>XPC!</string>
-    <key>CFBundleShortVersionString</key><string>1.1</string>
+    <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>NSExtension</key>
@@ -81,7 +100,7 @@ codesign --force --sign - "$APP"
 rm -f "$ENT"
 echo "已生成：$APP"
 
-if [[ "${1:-}" == "--install" ]]; then
+if [[ "$MODE" == "--install" ]]; then
     DEST="$HOME/Applications/日历小组件.app"
     pkill -x CalendarWidget || true
     pkill -x LunarCalendarWidget || true
@@ -93,4 +112,16 @@ if [[ "${1:-}" == "--install" ]]; then
     killall chronod 2>/dev/null || true   # 让小组件服务重新读取小组件列表
     open "$DEST"
     echo "已安装到 ~/Applications 并启动"
+fi
+
+if [[ "$MODE" == "--dmg" ]]; then
+    DMG="build/CalendarWidget-$APP_VERSION.dmg"
+    STAGE="$(mktemp -d)"
+    cp -R "$APP" "$STAGE/"
+    ln -s /Applications "$STAGE/Applications"
+    cp tools/dmg-readme.txt "$STAGE/安装说明.txt"
+    rm -f "$DMG"
+    hdiutil create -volname "日历小组件 $APP_VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+    rm -rf "$STAGE"
+    echo "已生成安装包：$DMG"
 fi

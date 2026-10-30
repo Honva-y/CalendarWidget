@@ -2,6 +2,17 @@
 
 可以放进**通知中心**或**桌面**的月历小组件，同时附带一个可自由缩放的桌面日历窗口。用 SwiftUI 和 WidgetKit 编写，不需要 Xcode。
 
+## 下载安装
+
+到 [Releases](https://github.com/Honva-y/CalendarWidget/releases/latest) 下载 `CalendarWidget-<版本>.dmg`，打开后把「日历小组件」拖进「应用程序」文件夹。支持 macOS 14 及以上，Apple 芯片和 Intel 芯片的 Mac 都能用。
+
+这个 App 没有 Apple 开发者签名，第一次打开会被系统拦截。放行方法任选一种，只需做一次：
+
+- 先双击打开一次，看到提示后点「完成」；再到「系统设置 › 隐私与安全性」，点「日历小组件」旁边的「仍要打开」。
+- 或者在终端运行：`xattr -dr com.apple.quarantine /Applications/日历小组件.app`
+
+打开后，在通知中心底部点「编辑小组件」，搜索「日历小组件」添加即可。
+
 ## 功能
 
 - 小组件有小、中、大、特大四种尺寸（特大只能放在桌面）：
@@ -21,7 +32,10 @@
 
 ```bash
 ./build.sh --install   # 构建，安装到 ~/Applications，注册小组件并启动
+./build.sh --dmg       # 构建 Apple 芯片 + Intel 通用版，打包成 build/CalendarWidget-<版本>.dmg
 ```
+
+发布新版本：修改 `build.sh` 开头的 `APP_VERSION`，运行 `./build.sh --dmg`，再把生成的 dmg 上传到 GitHub Release。
 
 ## 添加到通知中心
 
